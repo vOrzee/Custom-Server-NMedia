@@ -5,12 +5,14 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.netology.nmedia.dto.Post
+import ru.netology.nmedia.dto.PushMessage
 import ru.netology.nmedia.entity.AttachmentEmbeddable
 import ru.netology.nmedia.entity.PostEntity
 import ru.netology.nmedia.exception.NotFoundException
 import ru.netology.nmedia.exception.PermissionDeniedException
 import ru.netology.nmedia.extensions.principal
 import ru.netology.nmedia.repository.PostRepository
+import ru.netology.nmedia.repository.PushTokenRepository
 import java.time.OffsetDateTime
 import ru.netology.nmedia.repository.UserRepository
 
@@ -19,7 +21,9 @@ import ru.netology.nmedia.repository.UserRepository
 class PostService(
     private val postRepository: PostRepository,
     private val userRepository: UserRepository,
+    private val pushTokenRepository: PushTokenRepository,
     private val commentService: CommentService,
+    private val pushService: PushService,
 ) {
     fun getAll(): List<Post> {
         val principal = principal()
@@ -66,7 +70,12 @@ class PostService(
 
                 it.content = dto.content
                 it.attachment = AttachmentEmbeddable.fromDto(dto.attachment)
-                if (it.id == 0L) postRepository.save(it)
+                if (it.id == 0L) {
+                    postRepository.save(it)
+                    pushTokenRepository.findAll().forEach { pushToken ->
+                        pushService.send(pushToken.token, PushMessage(null,"${it.author.name} public new post"))
+                    }
+                }
                 it
             }.toDto(principal.id)
     }
